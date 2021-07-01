@@ -156,9 +156,16 @@ module.exports = {
         ],
       },
       {
-        type: "category",
-        label: "Community",
-        items: [
+        "type": "category",
+        "label": "Upgrade guide",
+        "items": [
+          "developer/upgrade-guide/2-11-to-3-0",
+        ]
+      },
+      {
+        "type": "category",
+        "label": "Community",
+        "items": [
           "developer/community/contributing",
           "developer/community/faq",
           "developer/community/support",

@@ -1,0 +1,208 @@
+---
+title: Upgrade Saleor to version 3.0
+---
+
+# Preparation and suggestions
+
+- 3.0 introduces breking changes and new features. Downtime and frontend changes will be required.
+- create separate test env. If possible, use production snapshot to test the data migration on local or staging environment
+- let your celery worker to process task queue before starting API migration
+- as always, prepare backup before the process
+
+# Multichannel
+
+Existing data will be assigned to the "default-channel" created by the database migration. As long, as shop only has one channel defined, you are not required to specify the `channel` argument. Thanks to that you'll be able to migrate storefront to 3.0 granually.
+
+After adding more channels, argument will become required. Because of that, we recommend always adding the channel argument:
+
+```graphql
+{
+  products(first: 5, channel: "default-channel") {
+    edges {
+      node {
+        id
+        name
+        description
+      }
+    }
+  }
+}
+```
+
+
+To read more about multichannel, check out [developer](developer/channels.mdx) and [dashboard](dashboard/channels.md) docs.
+
+## Editing channel related fields
+
+If you use API to modify objects (for example with custom App), please note that channel depending fields have dedicated mutations: updating product price require using [productChannelListingUpdate](developer/api-reference/mutations/product-channel-listing-update.mdx) mutation.
+
+Object attributes which can be defined on channel basis can be reference
+- [Collection Channel Listing](developer/api-reference/objects/collection-channel-listing.mdx)
+- [Product Channel Listing](developer/api-reference/objects/product-channel-listing.mdx)
+- [ProductVariant Channel Listing](developer/api-reference/objects/product-variant-channel-listing.mdx)
+- [Sale Channel Listing](developer/api-reference/objects/sale-channel-listing.mdx)
+- [ShippingMethod Channel Listing](developer/api-reference/objects/shipping-method-channel-listing.mdx)
+- [Voucher Channel Listing](developer/api-reference/objects/voucher-channel-listing.mdx)
+
+# Email templates
+
+Emails which are sent to the customers can be defined now using [Handlebars](https://handlebarsjs.com/). We also added dashboard configuration panel for them.
+
+
+Read documentation about user and admin email plugins:
+- [User emails](developer/available-plugins/user-emails)
+- [Admin emails plugin](developer/available-plugins/admin-emails)
+
+## Editor.js rich text editor and description fields
+
+All rich text fields now use Editor.js instead of Draft.js. Our database migration should convert old format to the new one, but visual inspection is recommended.
+
+To render blocks on your storefront you can use Editor.js in `read-only` mode, or use [one of libraries](https://github.com/editor-js/awesome-editorjs) recommended by its authors.
+
+Additionally, `description` fields in the API changed type from `String` to `JSONString` in following objects:
+- `Category`
+- `Collection`
+- `Product`
+- `Translation` for previous listed objects 
+
+`Pages` changed `content` field type in the same way.
+
+# Product and Variant Images
+
+3.0 extends possiblities for presenting your products to the customers. Now you can not only use phots, but also the videos. Old `image` attribute and `ProductImage` obects are left for backward compability, but are marked as deprecated. If you want to leverage all new features, use `ProductMedia` objects.
+
+Read documentation for the [product media](developer/products.mdx#media).
+
+# Error handling
+New version unifies error handling. 
+
+
+type ProductDelete {
+  errors: [Error!]! @deprecated(reason: "Use typed errors with error codes. This field will be removed after 2020-07-31.")
+  productErrors: [ProductError!]!
+  product: Product
+}
+
+type ProductDelete {
+  productErrors: [ProductError!]! @deprecated(reason: "Use errors field instead. This field will be removed in Saleor 4.0.")
+  errors: [ProductError!]!
+  product: Product
+}
+
+# Product filters
+
+[Need help with describing changes how do we filter products now]
+
+Read documentation for the [product filters and sorting](developer/products.mdx#retrieving-a-list-of-products).
+
+# Attributes
+
+Attribute type:
+- `Attribute.values` dropped in favor of paginated list called `choices`.
+
+Attribute input:
+- `value: String`. Use `values` instead
+
+AttributeReorderValues type:
+- `errors: [Error!]!` field changed type to `errors: [AttributeError!]!`
+
+# Invoice
+
+- invoiceSendEmail renamed to invoiceSendNotification
+
+# Permissions
+
+- `MANAGE_SERVICE_ACCOUNTS` removed. Use `MANAGE_APPS` for managing external apps.
+- `MANAGE_PRODUCT_TYPES_AND_ATTRIBUTES` added. Staff users managing the accounts may need adding this permission
+- `MANAGE_PAGE_TYPES_AND_ATTRIBUTES` added. Staff users managing pages may need adding this permission
+
+# Apps
+
+Service Accounts have been renamed in favor of Apps.
+
+## AuthorizationKey dropped
+
+Dropped mutations
+- authorizationKeyAdd
+- authorizationKeyDelete
+
+# Webhooks
+
+You can reference webhook payloads at our [documentation](https://docs.saleor.io/docs/3.0/developer/extending/apps/sample-webhook-payloads)
+
+Added events:
+
+- `DRAFT_CREATED_FROM_REPLACE`
+- `ADDED_PRODUCTS`
+- `REMOVED_PRODUCTS`
+- `ORDER_REPLACEMENT_CREATED`
+- `ORDER_DISCOUNT_ADDED`
+- `ORDER_DISCOUNT_AUTOMATICALLY_UPDATED`
+- `ORDER_DISCOUNT_UPDATED`
+- `ORDER_DISCOUNT_DELETED`
+- `ORDER_LINE_DISCOUNT_UPDATED`
+- `ORDER_LINE_DISCOUNT_REMOVED`
+- `ORDER_LINE_PRODUCT_DELETED`
+- `ORDER_LINE_VARIANT_DELETED`
+- `CONFIRMED`
+- `FULFILLMENT_REFUNDED`
+- `FULFILLMENT_RETURNED`
+- `FULFILLMENT_REPLACED`
+
+Removed:
+- `DRAFT_ADDED_PRODUCTS` in favor of `ADDED_PRODUCTS`
+- `DRAFT_REMOVED_PRODUCTS` in favor of `REMOVED_PRODUCTS`
+
+Full list of available events ccan bee found [here](developer/extending/apps/asynchronous-webhooks.mdx#available-webhook-events)
+
+# Shop
+
+- `Shop.geolocalization` field dropped due to insufficient performance of used plugin.
+- `Shop.homepageCollection` field dropped. Query collection of your choice instead
+- `Shop.navigation` field dropped. Query `menu` instead
+
+## Dropped deprecated fields
+
+- `privateMeta` and `meta` fields has been renamed to `privateMetadata` and `metadata` instead.
+
+AttributeValue type:
+- `type: AttributeValueType` dropped. Use the `inputType` field to determine the type of attribute's value.
+
+Errors in checkout mutations:
+- `errors:  [Error!]!` changed type to `[CheckoutError!]!`
+
+# Deprecations
+
+## Error handling
+
+API clients should expect errors in the field `errors`, instead of for example `attributeErrors`:
+
+```
+```
+
+```graphql
+mutation {
+  checkoutCreate(input:{lines: []}){
+    errors{
+      field
+      message
+    }
+  }
+}
+```
+
+Server response:
+```json
+{
+  "data": {
+    "checkoutCreate": {
+      "errors": [
+        {
+          "field": "channel",
+          "message": "You need to provide channel slug."
+        }
+      ]
+    }
+  }
+}
+```
